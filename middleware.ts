@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
 
   const isClient = profile.role === 'client';
   const isPropria = profile.role === 'propria';
+  const isMenage = profile.role === 'menage';
 
   // Détection précise : la route DOIT être exactement le root OU continuer par "/".
   // Évite que "/clients" (staff) soit confondu avec "/client" (portail).
@@ -61,7 +62,7 @@ export async function middleware(request: NextRequest) {
 
   // Redirect root selon rôle
   if (pathname === '/') {
-    const home = isClient ? '/client' : isPropria ? '/propria' : '/dashboard';
+    const home = isClient ? '/client' : isPropria ? '/propria' : isMenage ? '/propria/menage' : '/dashboard';
     return NextResponse.redirect(new URL(home, request.url));
   }
 
