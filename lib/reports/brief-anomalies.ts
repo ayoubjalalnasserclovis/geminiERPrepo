@@ -159,8 +159,7 @@ export async function buildAnomaliesBrief(): Promise<{ subject: string; html: st
     const { getAllArtisansAttestationStatus, aggregateAttestationStatus } = await import(
       '@/lib/artisans/attestation-status'
     );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await getAllArtisansAttestationStatus(admin as any, 'all');
+        const rows = await getAllArtisansAttestationStatus(admin as any, 'all');
     const agg = aggregateAttestationStatus(rows);
     attestationsExpired = agg.expired;
     attestationsSoon = agg.expiring_soon;

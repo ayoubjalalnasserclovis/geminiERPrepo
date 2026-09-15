@@ -174,16 +174,18 @@ export function CheckupChecklistGrid({
 
   // Nettoyage des timers à l'unmount
   useEffect(() => {
+    const timers = autosaveTimers.current;
+    const retryTimer = retryTimerRef.current;
     return () => {
-      Object.values(autosaveTimers.current).forEach(clearTimeout);
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      Object.values(timers).forEach(clearTimeout);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, []);
 
   // Ref vers scheduleAutosave (défini plus bas) — pour pouvoir l'appeler depuis l'effet de mount
   const scheduleAutosaveRef = useRef<((itemKey: string) => void) | null>(null);
 
-  const itemsByKey = new Map(items.map((i) => [i.item_key, i]));
+  const itemsByKey = useMemo(() => new Map(items.map((i) => [i.item_key, i])), [items]);
   const proofsByKey = new Map<string, CheckupProof[]>();
   for (const p of proofs) {
     if (!p.itemKey) continue;

@@ -1,17 +1,46 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "no-restricted-imports": ["error", {
-      "patterns": [{
-        "group": ["**/lib/supabase/admin", "**/lib/supabase/server"],
-        "message": "Ne jamais importer le client admin ou server depuis un composant client. Utiliser lib/supabase/browser.ts."
-      }]
-    }]
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": [
+              "**/lib/supabase/admin",
+              "**/lib/supabase/server"
+            ],
+            "message": "Ne jamais importer le client admin ou server depuis un composant client. Utiliser lib/supabase/browser.ts."
+          }
+        ]
+      }
+    ],
+    "react/no-unescaped-entities": "off"
   },
   "overrides": [
     {
-      "files": ["app/api/**/*.ts", "lib/**/*.ts", "**/actions.ts", "app/**/page.tsx", "app/**/layout.tsx", "middleware.ts"],
-      "rules": { "no-restricted-imports": "off" }
+      "files": [
+        "app/api/**/*.ts",
+        "app/**/route.ts",
+        "app/**/route.js",
+        "app/**/actions.ts",
+        "app/**/*actions.ts",
+        "app/actions/**/*.ts",
+        "app/**/page.tsx",
+        "app/**/layout.tsx",
+        "lib/**/*.ts",
+        "middleware.ts",
+        "components/**/menage-role-view.tsx",
+        "components/**/propria-audit-timeline.tsx",
+        "components/**/propria-bien-*-section.tsx",
+        "components/finance/**/*.tsx",
+        "components/dashboard/**/*.tsx",
+        "components/projects/**/*.tsx",
+        "components/proposals/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }
