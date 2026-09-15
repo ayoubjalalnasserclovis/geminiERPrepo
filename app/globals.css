@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Couleurs principales Stoniz */
+  --cream:        #F8F7F3;
+  --cream-soft:   #F0EDE4;
+  --black:        #0A0A0A;
+  --black-soft:   #1A1A1A;
+  --yellow:       #FFF86D;
+  --grey-text:    #6B6B6B;
+  --grey-line:    #D9D6CE;
+  --white:        #FFFFFF;
+
+  /* Aliases legacy (rétrocompat avec les anciens var names) */
+  --color-cream:       #F8F7F3;
+  --color-black:       #0A0A0A;
+  --color-white:       #FFFFFF;
+  --color-accent:      #FFF86D;
+  --color-accent-dark: #E6DE57;
+  --color-accent-light: #FFFCB0;
+  --color-gray-50:  #FAF9F6;
+  --color-gray-100: #F0EDE4;
+  --color-gray-200: #E8E4D8;
+  --color-gray-300: #D9D6CE;
+  --color-gray-400: #B5B0A4;
+  --color-gray-500: #8B8678;
+  --color-gray-600: #6B6B6B;
+  --color-gray-700: #404040;
+
+  /* Couleurs sémantiques */
+  --color-success: #16A34A;
+  --color-warning: #F59E0B;
+  --color-error:   #DC2626;
+  --color-info:    #2563EB;
+
+  /* Phases */
+  --phase-onboarding:        #EDE8DC;
+  --phase-sourcing:          #E3E8F2;
+  --phase-design:            #F5E9D9;
+  --phase-travaux:           #FAF1C9;
+  --phase-livraison:         #E0EBDC;
+  --phase-mise_en_location:  #E8DCEC;
+  --phase-termine:           #D9D6CE;
+
+  /* Typographie : Manrope unique sur tous les supports */
+  --font-display: 'Manrope', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-body:    'Manrope', -apple-system, 'Segoe UI', system-ui, sans-serif;
+
+  /* Radius (base 4pt) */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+html, body {
+  background: var(--cream);
+  color: var(--black);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Titres : ExtraBold (800) + letter-spacing négatif
+   ⚠ Placé dans @layer base pour que les utilities Tailwind (text-white, text-stoniz-gray-x…)
+   puissent surcharger la couleur quand un titre est placé sur fond sombre. */
+@layer base {
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+    font-weight: 800;
+    color: var(--black);
+  }
+  h1 { letter-spacing: -0.025em; line-height: 0.95; }
+  h2 { letter-spacing: -0.02em;  line-height: 1.1; }
+  h3 { letter-spacing: -0.015em; line-height: 1.15; }
+}
+
+/* Surligneur jaune — signature Stoniz (1 à 3 mots-clés max par titre) */
+.highlight,
+mark {
+  background: var(--yellow);
+  color: var(--black);
+  padding: 0.05em 0.25em;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: inherit;
+}
+
+/* Labels / eyebrows */
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--grey-text);
+}
+
+/* Inputs */
+input, textarea, select {
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: var(--white);
+  color: var(--black);
+  border: 1px solid var(--grey-line);
+  border-radius: var(--radius-sm);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--black);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.08);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--grey-line); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--grey-text); }
+
+::selection { background: var(--yellow); color: var(--black); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadein { animation: fadeIn 200ms ease-out; }

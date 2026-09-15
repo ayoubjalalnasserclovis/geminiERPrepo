@@ -1,0 +1,11 @@
+{
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/daily-reminders", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/propria-maintenance", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/weekly-stale-pauses", "schedule": "0 9 * * 1" },
+    { "path": "/api/cron/hostaway-sync", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/checkups-auto", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/weekly-briefs", "schedule": "0 7 * * 1" }
+  ]
+}

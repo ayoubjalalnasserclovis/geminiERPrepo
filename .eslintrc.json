@@ -1,0 +1,17 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": ["error", {
+      "patterns": [{
+        "group": ["**/lib/supabase/admin", "**/lib/supabase/server"],
+        "message": "Ne jamais importer le client admin ou server depuis un composant client. Utiliser lib/supabase/browser.ts."
+      }]
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["app/api/**/*.ts", "lib/**/*.ts", "**/actions.ts", "app/**/page.tsx", "app/**/layout.tsx", "middleware.ts"],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ]
+}

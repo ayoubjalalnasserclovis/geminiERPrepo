@@ -1,0 +1,24 @@
+node_modules/
+.next/
+out/
+dist/
+.env
+.env.local
+.env*.local
+.vercel
+.DS_Store
+*.log
+coverage/
+.playwright/
+.supabase/
+supabase/.temp/
+.env*
+# …mais on garde les fichiers d'exemple (pas de secrets dedans)
+!.env.example
+!.env.test.example
+tsconfig.tsbuildinfo
+
+# Artefacts de tests
+playwright-report/
+test-results/
+.github/workflows/test.yml
