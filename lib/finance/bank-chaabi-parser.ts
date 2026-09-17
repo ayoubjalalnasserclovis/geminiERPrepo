@@ -39,22 +39,54 @@ export type ParseResult = {
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 /**
- * Convertit "1 299,00" → 1299.00 ; "" → null ; "-245,00" → -245.00
- * Aussi tolère les nombres déjà parsés (XLSX)
+ * Convertit "1 299,00" → 1299.00 ; "1.299,00 MAD" → 1299.00 ; "" → null ; "-245,00" → -245.00 ; "(245,00)" → -245.00
+ * Aussi tolère les nombres déjà parsés (XLSX) et divers formats de devises / séparateurs.
  */
 function parseAmount(raw: unknown): number | null {
   if (raw == null || raw === '') return null;
-  if (typeof raw === 'number') return raw;
-  const s = String(raw).trim();
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  let s = String(raw).trim();
   if (s === '' || s === '-') return null;
-  // Retirer espaces (séparateur milliers) et remplacer virgule par point
-  const cleaned = s.replace(/\s/g, '').replace(',', '.');
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+
+  // Détecter notation comptable négative : (120,50) → -120.50
+  let isNegative = false;
+  if (s.startsWith('(') && s.endsWith(')')) {
+    isNegative = true;
+    s = s.slice(1, -1).trim();
+  } else if (s.startsWith('-')) {
+    isNegative = true;
+    s = s.slice(1).trim();
+  }
+
+  // Retirer devises courantes (MAD, DH, DHS, EUR, €) et espaces
+  s = s.replace(/(?:MAD|DHS|DH|EUR|€|\$)/gi, '').trim();
+  s = s.replace(/\s+/g, '');
+
+  if (s === '' || s === '-') return null;
+
+  // Gérer séparateurs de milliers et décimaux
+  const hasDot = s.includes('.');
+  const hasComma = s.includes(',');
+
+  if (hasDot && hasComma) {
+    if (s.indexOf('.') < s.indexOf(',')) {
+      // "1.299,00" -> point = milliers, virgule = décimale
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // "1,299.00" -> virgule = milliers, point = décimale
+      s = s.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    s = s.replace(',', '.');
+  }
+
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return isNegative ? -Math.abs(n) : n;
 }
 
 /**
- * Convertit "02-06-2026" → "2026-06-02" ; "" / "-" → null
+ * Convertit "02-06-2026" ou "02/06/2026" → "2026-06-02" ; "" / "-" → null
  * Aussi tolère les serial dates Excel (number) ou les Date objects.
  */
 function parseDate(raw: unknown): string | null {
@@ -71,8 +103,8 @@ function parseDate(raw: unknown): string | null {
   }
   const s = String(raw).trim();
   if (s === '' || s === '-') return null;
-  // Format Chaabi : DD-MM-YYYY
-  const m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  // Format Chaabi : DD-MM-YYYY ou DD/MM/YYYY (avec heure optionnelle)
+  const m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
   if (m) {
     const [, dd, mm, yyyy] = m;
     return `${yyyy}-${mm}-${dd}`;
@@ -150,13 +182,13 @@ function normalizeRef(ref: string | null | undefined): string {
  */
 export function extractRefFromLabel(label: string): string | null {
   if (!label) return null;
-  // Pattern principal : "REF <digits>"
-  let m = label.match(/\bREF\s+(\d+)/i);
+  // Pattern principal : "REF <digits>" ou "REF: <digits>"
+  let m = label.match(/\bREF[:.\s]+([A-Za-z0-9]+)/i);
   if (m) return m[1];
   // Pattern chèque : "CHEQUE N <digits>" ou "N° <digits>"
-  m = label.match(/\bCHEQUE\s+N[°\s]+(\d+)/i);
+  m = label.match(/\bCHEQUE\s+N[°:.\s]+(\d+)/i);
   if (m) return m[1];
-  m = label.match(/\bN[°\s]+(\d+)/i);
+  m = label.match(/\bN[°:.\s]+(\d+)/i);
   if (m) return m[1];
   return null;
 }
@@ -209,6 +241,7 @@ export function computeDedupHash(input: {
   // Le card merchant fingerprint + groupage mensuel garantit la dédup.
 
   const refNorm = normalizeRef(input.reference);
+  const absAmountStr = Math.abs(input.amount).toFixed(2);
 
   // Niveau 1 : achat carte → fingerprint marchand + mois + ref optionnelle
   //
@@ -226,7 +259,7 @@ export function computeDedupHash(input: {
     const key = [
       input.account_id,
       yearMonth,
-      input.amount.toFixed(2),
+      absAmountStr,
       input.is_debit ? 'D' : 'C',
       tail,
     ].join('|');
@@ -238,7 +271,7 @@ export function computeDedupHash(input: {
     const key = [
       input.account_id,
       input.operation_date,
-      input.amount.toFixed(2),
+      absAmountStr,
       input.is_debit ? 'D' : 'C',
       `ref:${refNorm}`,
     ].join('|');
@@ -249,7 +282,7 @@ export function computeDedupHash(input: {
   const key = [
     input.account_id,
     input.operation_date,
-    input.amount.toFixed(2),
+    absAmountStr,
     input.is_debit ? 'D' : 'C',
     `lbl:${normalizeLabel(input.label).slice(0, 80)}`,
   ].join('|');
@@ -280,13 +313,18 @@ export function parseChaabiCSV(text: string): ParseResult {
   // Détection ligne par ligne, séparateur ';'
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   const matrix: unknown[][] = lines.map(line => {
-    // Split sur ; en gérant les guillemets (au cas où)
+    // Split sur ; en gérant les guillemets et quotes échappées ("") selon RFC 4180
     const cells: string[] = [];
     let current = '';
     let inQuote = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') {
+          current += '"';
+          i++; // saute le second quote
+          continue;
+        }
         inQuote = !inQuote;
         continue;
       }
@@ -333,7 +371,7 @@ function parseMatrix(matrix: unknown[][]): ParseResult {
     // On accepte n'importe quelle position de colonne (pas juste col 0 et 2)
     // pour être tolérant à un ordre légèrement différent.
     const hasDate = cells.some(c => c.includes('date'));
-    const hasLibelle = cells.some(c => c.includes('libelle'));
+    const hasLibelle = cells.some(c => c.includes('libelle') || c.includes('designation') || c.includes('description'));
     const hasDebit = cells.some(c => c.includes('debit'));
     const hasCredit = cells.some(c => c.includes('credit'));
     if (hasDate && hasLibelle && hasDebit && hasCredit) {
@@ -357,17 +395,39 @@ function parseMatrix(matrix: unknown[][]): ParseResult {
     return { rows, errors, bank_code: 'chaabi' };
   }
 
+  // Résolution dynamique des index de colonnes selon la ligne d'en-tête détectée
+  const headerCells = (matrix[headerIdx] ?? []).map(normaliseCell);
+
+  let opDateIdx = headerCells.findIndex(c => c.includes('operation') || (c.includes('date') && !c.includes('valeur')));
+  if (opDateIdx === -1) opDateIdx = headerCells.findIndex(c => c.includes('date'));
+  if (opDateIdx === -1) opDateIdx = 0;
+
+  let valDateIdx = headerCells.findIndex(c => c.includes('valeur'));
+  if (valDateIdx === -1) valDateIdx = 1;
+
+  let labelIdx = headerCells.findIndex(c => c.includes('libelle') || c.includes('designation') || c.includes('description'));
+  if (labelIdx === -1) labelIdx = 2;
+
+  let debitIdx = headerCells.findIndex(c => c.includes('debit'));
+  if (debitIdx === -1) debitIdx = 3;
+
+  let creditIdx = headerCells.findIndex(c => c.includes('credit'));
+  if (creditIdx === -1) creditIdx = 4;
+
+  let refIdx = headerCells.findIndex(c => c.includes('reference') || c.includes('ref'));
+  if (refIdx === -1) refIdx = 5;
+
   // Parcourir les lignes de données
   for (let i = headerIdx + 1; i < matrix.length; i++) {
     const row = matrix[i];
     if (!row || row.length === 0) continue;
 
-    const operationRaw = row[0];
-    const valueRaw = row[1];
-    const labelRaw = row[2];
-    const debitRaw = row[3];
-    const creditRaw = row[4];
-    const refRaw = row[5];
+    const operationRaw = row[opDateIdx];
+    const valueRaw = row[valDateIdx];
+    const labelRaw = row[labelIdx];
+    const debitRaw = row[debitIdx];
+    const creditRaw = row[creditIdx];
+    const refRaw = row[refIdx];
 
     // Ignorer les lignes vides ou récap (solde initial, solde reporté, etc.)
     const labelStr = String(labelRaw ?? '').trim();

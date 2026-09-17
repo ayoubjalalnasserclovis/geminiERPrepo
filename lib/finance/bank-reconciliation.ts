@@ -219,7 +219,7 @@ export async function findReconcileCandidates(
   const amount = Math.abs(Number(tx.debit_mad ?? tx.credit_mad ?? 0));
   if (amount < 1) return [];
 
-  const isDebit = (tx.debit_mad ?? 0) > 0;
+  const isDebit = tx.debit_mad != null && tx.debit_mad !== 0;
   const candidates: ReconcileCandidate[] = [];
 
   // Fenêtre montant : +/- 1 MAD

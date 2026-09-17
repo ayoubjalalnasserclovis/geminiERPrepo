@@ -255,7 +255,9 @@ function assembleAchats(
       lot_description: lotRow?.description ?? null,
       lot_category: lotRow?.category ?? null,
       supplier_name:
-        lotRow?.supplier_name ?? acomptes[0]?.payment_id ? acomptes[0]?.notes : null,
+        lotRow?.supplier_name ??
+        payments.find((p) => p.lot_id === lotId)?.supplier_name ??
+        null,
       lot_total_amount: lotTotal,
       quote_doc: fileNameFromDoc(lotRow?.quote_doc),
       invoice_doc: fileNameFromDoc(lotRow?.invoice_doc),

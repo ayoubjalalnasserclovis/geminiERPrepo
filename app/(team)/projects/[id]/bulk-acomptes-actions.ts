@@ -28,7 +28,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { assertRole } from '@/lib/auth/require';
+import { assertRole, type Role } from '@/lib/auth/require';
 import { logFinanceAudit } from '@/lib/finance/audit';
 import { logDeletion } from '@/lib/audit/deletion';
 import { cascadeDeallocateOnDelete } from '@/lib/finance/cascade-deallocate';
@@ -61,6 +61,7 @@ export type BulkAcomptesResult =
 
 const CONFIG = {
   achats: {
+    allowedRoles: ['ceo', 'chef_projet', 'finance', 'achats'] as readonly Role[],
     payTable: 'achats_payments',
     lotTable: 'achats_lots',
     numCol: 'acompte_number',
@@ -76,6 +77,7 @@ const CONFIG = {
     label: 'fournisseur',
   },
   travaux: {
+    allowedRoles: ['ceo', 'chef_projet', 'finance'] as readonly Role[],
     payTable: 'travaux_payments',
     lotTable: 'travaux_lots',
     numCol: 'acompte_number',
@@ -91,6 +93,7 @@ const CONFIG = {
     label: 'artisan',
   },
   services: {
+    allowedRoles: ['ceo', 'chef_projet', 'finance'] as readonly Role[],
     payTable: 'services_payments',
     lotTable: 'services_lots',
     numCol: 'acompte_index',
@@ -143,6 +146,10 @@ export async function bulkManageAcomptesAction(input: BulkAcomptesInput): Promis
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
     const d = parsed.data;
     const cfg = CONFIG[d.source];
+
+    if (!cfg.allowedRoles.includes(me.role)) {
+      return { ok: false, error: 'Permission refusée pour ce module' };
+    }
 
     const supabase = createClient();
     const skipped: BulkAcomptesSkipped[] = [];

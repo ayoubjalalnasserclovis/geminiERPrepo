@@ -101,7 +101,11 @@ const RULES: Rule[] = [
     match: (l) => /^ACHAT PAR CARTE\s/i.test(l) || /^ACHAT PAR CARTE DE PAIEMENT/i.test(l),
     category: 'achat_cb',
     allocation: 'cabinet_charge',
-    extractBeneficiary: (l) => extractBeneficiary(l, /CHEZ\s+(.+?)(?:>|$)/i),
+    extractBeneficiary: (l) => {
+      const chez = extractBeneficiary(l, /CHEZ\s+(.+?)(?:>|$)/i);
+      if (chez) return chez;
+      return extractBeneficiary(l, /^ACHAT\s+PAR\s+CARTE\s+(.+?)(?:>|\(\*\)|$)/i);
+    },
   },
 
   // ─── Virements ─────────────────────────────────────────────────────────
@@ -153,7 +157,7 @@ const RULES: Rule[] = [
     match: (l) => /^CHEQUE\s+N\s+\d+\s+REMIS\s+PAR/i.test(l) || /^ENCAISSEMENT\s+CHEQUE/i.test(l),
     category: 'cheque_recu',
     allocation: 'autre',
-    extractBeneficiary: (l) => extractBeneficiary(l, /EN FAVEUR DE\s+(.+)/i),
+    extractBeneficiary: (l) => extractBeneficiary(l, /(?:REMIS\s+PAR|PAR|EN\s+FAVEUR\s+DE)\s+(.+)/i),
   },
 
   // ─── Charges fiscales / sociales / structure ──────────────────────────

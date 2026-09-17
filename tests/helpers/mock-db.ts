@@ -140,6 +140,10 @@ export class MockQueryBuilder {
     return this;
   }
 
+  or(clause: string) {
+    return this;
+  }
+
   range(from: number, to: number) {
     this.limitCount = to - from + 1;
     return this;
