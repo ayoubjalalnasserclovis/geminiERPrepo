@@ -67,9 +67,8 @@ export function CheckupInventoryGrid({
   // → autosave on-blur + débounce 700ms pendant la frappe, comme le reste de la grille).
   const measureTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   useEffect(() => {
-    const timers = measureTimers.current;
     return () => {
-      Object.values(timers).forEach(clearTimeout);
+      Object.values(measureTimers.current).forEach(clearTimeout);
     };
   }, []);
 

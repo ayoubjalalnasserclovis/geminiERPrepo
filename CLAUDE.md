@@ -1,11 +1,3 @@
-<!-- STRICT REPOSITORY & AGENT DIRECTIVE -->
-> 🚨 **ABSOLUTE BOUNDARY RULES (NON-NEGOTIABLE)**:
-> 1. Target: EXCLUSIVELY https://github.com/ayoubjalalnasserclovis/geminiERPrepo and local directory. NEVER touch anything outside this repository.
-> 2. Zero Design or Capability Drift: DO NOT change design, UI layouts, or business capabilities.
-> 3. Objective: 100% BUG-PROOFING ONLY. Fix bugs, type errors, regressions, edge cases.
-> 4. Bug Log: EVERY bug detected and fixed MUST be documented in BUG_LOG.md.
-<!-- END STRICT DIRECTIVE -->
-
 # CLAUDE.md — Briefing IA Stoniz ERP
 
 > Fichier lu en priorité par toute IA travaillant sur ce repo.

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ApprovalCard } from '@/components/validations/approval-card';
+import { CeoBulkPanel } from '@/components/validations/ceo-bulk-panel';
 
 const TABS = [
   { v: 'finance_pending', l: 'En attente Finance' },
@@ -85,6 +86,22 @@ export default async function ValidationsPage({ searchParams }: { searchParams: 
             : 'Aucune demande dans l\'historique'}
           description="Les demandes apparaîtront ici dès qu'elles seront créées depuis les pages paiements / travaux / achats."
         />
+      ) : (tab === 'ceo_pending' || tab === 'to_pay') && me.role === 'ceo' ? (
+        <CeoBulkPanel
+          mode={tab === 'to_pay' ? 'pay' : 'approve'}
+          approvals={approvals.map((a: any) => ({
+            id: a.id,
+            amount: Number(a.amount ?? 0),
+            currency: a.currency ?? 'MAD',
+            beneficiary_name: a.beneficiary_name ?? null,
+            description: a.description ?? null,
+            urgency: a.urgency ?? 'normal',
+          }))}
+        >
+          {approvals.map((a: any) => (
+            <ApprovalCard key={a.id} approval={a} currentUser={{ id: me.id, role: me.role }} />
+          ))}
+        </CeoBulkPanel>
       ) : (
         <div className="space-y-3">
           {approvals.map((a: any) => (

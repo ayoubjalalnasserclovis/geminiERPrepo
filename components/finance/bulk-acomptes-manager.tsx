@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, CalendarClock, Percent } from 'lucide-react';
+import { Trash2, CalendarClock, Percent, CheckCircle2 } from 'lucide-react';
 import { formatMad } from '@/lib/utils/format';
 import {
   bulkManageAcomptesAction,
@@ -49,7 +49,7 @@ const PENDING_STATUS: Record<BulkAcomptesSource, string> = {
   services: 'planifie',
 };
 
-type Op = 'delete' | 'set_date' | 'set_amount';
+type Op = 'delete' | 'set_date' | 'set_amount' | 'mark_paid';
 
 export function BulkAcomptesManager({
   projectId,
@@ -121,6 +121,9 @@ export function BulkAcomptesManager({
     if (op === 'delete' && !confirm(`Supprimer ${targets.length} acompte(s) ? Soft-delete — restaurable depuis la corbeille admin.`)) {
       return;
     }
+    if (op === 'mark_paid' && !confirm(`Marquer ${targets.length} acompte(s) comme payé(s) ? Statut → payé, montant réglé = montant total, date de paiement = maintenant.`)) {
+      return;
+    }
     start(async () => {
       try {
         const r = await bulkManageAcomptesAction({
@@ -149,7 +152,8 @@ export function BulkAcomptesManager({
     return (
       <div className="space-y-2">
         <div className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 rounded px-2 py-1.5">
-          ✓ {result.affected} acompte{result.affected > 1 ? 's' : ''} {op === 'delete' ? 'supprimé' : 'modifié'}{result.affected > 1 ? 's' : ''}.
+          ✓ {result.affected} acompte{result.affected > 1 ? 's' : ''}{' '}
+          {op === 'delete' ? 'supprimé' : op === 'mark_paid' ? 'marqué payé' : 'modifié'}{result.affected > 1 ? 's' : ''}.
         </div>
         {result.skipped.length > 0 && (
           <div className="text-xs bg-orange-50 text-orange-900 border border-orange-200 rounded px-2 py-1.5 space-y-0.5">
@@ -201,6 +205,10 @@ export function BulkAcomptesManager({
         <button type="button" onClick={() => setOp('set_amount')}
           className={`px-3 py-1.5 rounded text-xs border inline-flex items-center gap-1 ${op === 'set_amount' ? 'bg-stoniz-black text-white border-stoniz-black' : 'bg-white text-stoniz-gray-700 border-stoniz-gray-300 hover:bg-stoniz-gray-50'}`}>
           <Percent className="w-3 h-3" /> Modifier le montant
+        </button>
+        <button type="button" onClick={() => setOp('mark_paid')}
+          className={`px-3 py-1.5 rounded text-xs border inline-flex items-center gap-1 ${op === 'mark_paid' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}>
+          <CheckCircle2 className="w-3 h-3" /> Marquer payé
         </button>
       </div>
 
@@ -257,7 +265,10 @@ export function BulkAcomptesManager({
                   <th className="px-2 py-1.5 text-left w-20">Acompte</th>
                   <th className="px-2 py-1.5 text-right w-28">Actuel</th>
                   <th className="px-2 py-1.5 text-right w-32">
-                    {op === 'delete' ? 'Après' : op === 'set_date' ? 'Nouvelle date' : 'Nouveau montant'}
+                    {op === 'delete' ? 'Après'
+                      : op === 'set_date' ? 'Nouvelle date'
+                      : op === 'mark_paid' ? 'Statut'
+                      : 'Nouveau montant'}
                   </th>
                 </tr>
               </thead>
@@ -275,6 +286,7 @@ export function BulkAcomptesManager({
                       <td className="px-2 py-1.5 text-right tabular-nums">
                         {op === 'delete' && <span className="text-red-700">supprimé</span>}
                         {op === 'set_date' && (dateValue || <span className="text-stoniz-gray-400">effacée</span>)}
+                        {op === 'mark_paid' && <span className="text-emerald-700 font-medium">✓ payé</span>}
                         {op === 'set_amount' && (
                           after != null
                             ? <span className="font-medium">{formatMad(after)}</span>

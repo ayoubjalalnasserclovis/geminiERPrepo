@@ -43,7 +43,7 @@ export type BulkAcomptesInput = {
   lot_ids: string[];
   /** null = tous les acomptes pending des lots ; 1..6 = uniquement ce n°. */
   acompte_number?: number | null;
-  op: 'delete' | 'set_date' | 'set_amount';
+  op: 'delete' | 'set_date' | 'set_amount' | 'mark_paid';
   /** op=set_date : nouvelle échéance (YYYY-MM-DD) ou null pour effacer. */
   scheduled_date?: string | null;
   /** op=set_amount */
@@ -66,6 +66,7 @@ const CONFIG = {
     numCol: 'acompte_number',
     devisCol: 'devis_fournisseur_mad',
     pendingStatuses: ['pending'],
+    paidStatus: 'paid',
     hasPct: true,
     hasApprovals: true,
     financeAudit: 'achats_payments' as const,
@@ -80,6 +81,7 @@ const CONFIG = {
     numCol: 'acompte_number',
     devisCol: 'devis_artisan_mad',
     pendingStatuses: ['pending'],
+    paidStatus: 'paid',
     hasPct: true,
     hasApprovals: true,
     financeAudit: 'travaux_payments' as const,
@@ -94,6 +96,7 @@ const CONFIG = {
     numCol: 'acompte_index',
     devisCol: 'devis_prestataire_mad',
     pendingStatuses: ['planifie'],
+    paidStatus: 'paye',
     hasPct: false, // pas de colonne acompte_pct sur services_payments
     hasApprovals: false, // services_payments hors workflow payment_approvals
     financeAudit: null,
@@ -110,7 +113,7 @@ const inputSchema = z
     source: z.enum(['achats', 'travaux', 'services']),
     lot_ids: z.array(z.string().uuid()).min(1, 'Aucun lot sélectionné'),
     acompte_number: z.coerce.number().int().min(1).max(6).optional().nullable(),
-    op: z.enum(['delete', 'set_date', 'set_amount']),
+    op: z.enum(['delete', 'set_date', 'set_amount', 'mark_paid']),
     scheduled_date: z.string().optional().nullable(),
     amount_mode: z.enum(['pct', 'fixed']).optional(),
     amount_value: z.coerce.number().optional(),
@@ -324,6 +327,41 @@ export async function bulkManageAcomptesAction(input: BulkAcomptesInput): Promis
       }
     }
 
+    if (d.op === 'mark_paid') {
+      // Marque payé : status → paid/paye, paid_at=now, amount_paid=amount_total.
+      // Chadi 2026-09-16 : permet de marquer plusieurs lots × acompte n°N
+      // comme payés en un clic après un virement groupé.
+      const nowIso = new Date().toISOString();
+      for (const p of eligible) {
+        const patch: any = {
+          status: cfg.paidStatus,
+          paid_at: nowIso,
+          amount_paid: p.amount_total,
+        };
+        const { error } = await supabase.from(cfg.payTable).update(patch).eq('id', p.id);
+        if (error) {
+          skipped.push({ payment_id: p.id, reason: `Échec mark-paid : ${error.message}` });
+          continue;
+        }
+        if (cfg.financeAudit) {
+          await logFinanceAudit({
+            table: cfg.financeAudit,
+            recordId: p.id,
+            action: 'update',
+            actorId: me.id,
+            label: `Acompte ${p[cfg.numCol] ?? '?'} marqué payé (action bulk)`,
+            payload: {
+              bulk: true,
+              op: 'mark_paid',
+              amount: p.amount_total,
+              [cfg.numCol]: p[cfg.numCol],
+            },
+          });
+        }
+        affected++;
+      }
+    }
+
     if (affected === 0) {
       return { ok: false, error: 'Aucun acompte modifié — voir le détail des acomptes ignorés.' };
     }
@@ -331,7 +369,7 @@ export async function bulkManageAcomptesAction(input: BulkAcomptesInput): Promis
     // ── 4. Revalidation ─────────────────────────────────────────────────────
     revalidatePath(`/projects/${d.project_id}/${cfg.pathSuffix}`);
     revalidatePath(`/projects/${d.project_id}`);
-    if (d.op === 'delete') {
+    if (d.op === 'delete' || d.op === 'mark_paid') {
       revalidatePath('/finance/tresorerie');
       revalidatePath('/finance/tresorerie/reconciliation');
     }

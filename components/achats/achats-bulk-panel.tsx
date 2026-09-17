@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckSquare, Square, Receipt, FileText, User2, Trash2, X, Filter, Search, Wallet, CalendarClock, Banknote, Copy } from 'lucide-react';
 import {
@@ -146,11 +146,11 @@ export function AchatsBulkPanel({
     }
     return m;
   }, [payments]);
-  const nextFreeAcompte = useCallback((lotId: string): number | null => {
+  function nextFreeAcompte(lotId: string): number | null {
     const taken = takenByLot.get(lotId) ?? new Set<number>();
     for (let i = 1; i <= 6; i++) if (!taken.has(i)) return i;
     return null;
-  }, [takenByLot]);
+  }
 
   const visibleLots = useMemo(() => {
     let out = lots;
@@ -179,7 +179,7 @@ export function AchatsBulkPanel({
       out = out.filter((l) => nextFreeAcompte(l.id) === n);
     }
     return out;
-  }, [lots, filterText, filterSupplierId, filterQuote, filterInvoice, filterPo, filterAcompteHas, filterAcompteNext, nextFreeAcompte, takenByLot]);
+  }, [lots, filterText, filterSupplierId, filterQuote, filterInvoice, filterPo, filterAcompteHas, filterAcompteNext, takenByLot]);
 
   const hasFilter = !!filterText || !!filterSupplierId
     || filterQuote !== 'all' || filterInvoice !== 'all' || filterPo !== 'all'

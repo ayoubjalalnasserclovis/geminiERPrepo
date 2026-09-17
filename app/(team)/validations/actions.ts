@@ -588,6 +588,78 @@ export async function ceoApproveAction(approvalId: string, decision: 'approved'|
   return { ok: true };
 }
 
+// ─── 3bis. Bulk approbation CEO (CEO 2026-09-16) ────────────────────────
+//
+// Permet au CEO de valider en masse plusieurs demandes en attente CEO.
+// Réutilise ceoApproveAction() pour préserver toute la logique (audit,
+// emails, etc.). Retourne {ok, count_ok, count_errors, errors[]}.
+export async function ceoBulkApproveAction(
+  approvalIds: string[],
+  decision: 'approved' | 'rejected' = 'approved',
+  notes?: string,
+) {
+  await assertRole(['ceo']);
+  if (!Array.isArray(approvalIds) || approvalIds.length === 0) {
+    return { ok: false as const, error: 'Aucune demande sélectionnée', count_ok: 0, errors: [] };
+  }
+  const results: { id: string; ok: boolean; error?: string }[] = [];
+  for (const id of approvalIds) {
+    try {
+      const r = await ceoApproveAction(id, decision, notes);
+      results.push({ id, ok: r.ok, error: (r as any).error });
+    } catch (e: any) {
+      results.push({ id, ok: false, error: e?.message ?? 'Erreur inconnue' });
+    }
+  }
+  const count_ok = results.filter(r => r.ok).length;
+  const errors = results.filter(r => !r.ok);
+  revalidatePath('/validations');
+  return {
+    ok: errors.length === 0,
+    count_ok,
+    count_errors: errors.length,
+    errors: errors.map(e => ({ id: e.id, error: e.error ?? 'Erreur' })),
+  };
+}
+
+// ─── 3ter. Bulk "Marquer payé" CEO (CEO 2026-09-16) ──────────────────────
+// Sur le tab to_pay : le CEO a effectué un batch de virements bancaires et
+// veut cocher toutes les demandes concernées comme payées d'un coup.
+// Méthode et référence sont appliquées à toutes les lignes (utile quand
+// c'est le même relevé/virement groupé). Pas de preuve fichier en bulk
+// (uploadable individuellement plus tard si besoin).
+export async function ceoBulkMarkPaidAction(
+  approvalIds: string[],
+  payment_method?: string,
+  payment_reference?: string,
+) {
+  await assertRole(['ceo']);
+  if (!Array.isArray(approvalIds) || approvalIds.length === 0) {
+    return { ok: false as const, error: 'Aucune demande sélectionnée', count_ok: 0, errors: [] };
+  }
+  const results: { id: string; ok: boolean; error?: string }[] = [];
+  for (const id of approvalIds) {
+    try {
+      const fd = new FormData();
+      if (payment_method) fd.set('payment_method', payment_method);
+      if (payment_reference) fd.set('payment_reference', payment_reference);
+      const r = await markApprovalAsPaidAction(id, fd);
+      results.push({ id, ok: r.ok, error: (r as any).error });
+    } catch (e: any) {
+      results.push({ id, ok: false, error: e?.message ?? 'Erreur inconnue' });
+    }
+  }
+  const count_ok = results.filter(r => r.ok).length;
+  const errors = results.filter(r => !r.ok);
+  revalidatePath('/validations');
+  return {
+    ok: errors.length === 0,
+    count_ok,
+    count_errors: errors.length,
+    errors: errors.map(e => ({ id: e.id, error: e.error ?? 'Erreur' })),
+  };
+}
+
 // ─── 4. Marquer comme payé + preuve virement ────────────────────────────
 const markPaidSchema = z.object({
   payment_method: z.string().optional().nullable(),

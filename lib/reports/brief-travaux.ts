@@ -66,7 +66,7 @@ export async function buildTravauxBrief(): Promise<{ subject: string; html: stri
   };
   const sansSousPhase: any[] = [];
   for (const p of projetsActifs) {
-        const sp = (p as any).chantier_sous_phase as string | undefined;
+    const sp = (p as any).chantier_sous_phase as string | undefined;
     if (sp && bySousPhase[sp]) bySousPhase[sp].push(p);
     else sansSousPhase.push(p);
   }
@@ -139,7 +139,7 @@ export async function buildTravauxBrief(): Promise<{ subject: string; html: stri
     const { getAllArtisansAttestationStatus, aggregateAttestationStatus } = await import(
       '@/lib/artisans/attestation-status'
     );
-        const rows = await getAllArtisansAttestationStatus(admin as any, 'all');
+    const rows = await getAllArtisansAttestationStatus(admin as any, 'all');
     const agg = aggregateAttestationStatus(rows);
     attestationsIssues = agg.expired + agg.expiring_soon + agg.missing;
   } catch {}

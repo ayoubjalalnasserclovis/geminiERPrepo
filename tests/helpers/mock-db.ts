@@ -74,16 +74,18 @@ export class MockQueryBuilder {
       ...item,
     }));
     table.push(...inserted);
-    return {
-      select: () => ({
-        single: async () => ({ data: inserted[0], error: null }),
-        maybeSingle: async () => ({ data: inserted[0], error: null }),
-        then: (resolve: any) => resolve({ data: Array.isArray(data) ? inserted : inserted[0], error: null }),
-      }),
+    const resultObj: any = {
       data: Array.isArray(data) ? inserted : inserted[0],
       error: null,
-      then: (resolve: any) => resolve({ data: Array.isArray(data) ? inserted : inserted[0], error: null }),
     };
+    return Object.assign(Promise.resolve(resultObj), {
+      select: () => Object.assign(Promise.resolve(resultObj), {
+        single: async () => ({ data: inserted[0], error: null }),
+        maybeSingle: async () => ({ data: inserted[0], error: null }),
+      }),
+      data: resultObj.data,
+      error: null,
+    });
   }
 
   gte(field: string, val: any) {
@@ -165,16 +167,18 @@ export class MockQueryBuilder {
       }
     }
 
-    return {
-      select: () => ({
-        single: async () => ({ data: results[0], error: null }),
-        maybeSingle: async () => ({ data: results[0], error: null }),
-        then: (resolve: any) => resolve({ data: Array.isArray(data) ? results : results[0], error: null }),
-      }),
+    const resultObj: any = {
       data: Array.isArray(data) ? results : results[0],
       error: null,
-      then: (resolve: any) => resolve({ data: Array.isArray(data) ? results : results[0], error: null }),
     };
+    return Object.assign(Promise.resolve(resultObj), {
+      select: () => Object.assign(Promise.resolve(resultObj), {
+        single: async () => ({ data: results[0], error: null }),
+        maybeSingle: async () => ({ data: results[0], error: null }),
+      }),
+      data: resultObj.data,
+      error: null,
+    });
   }
 
   update(patch: any) {
