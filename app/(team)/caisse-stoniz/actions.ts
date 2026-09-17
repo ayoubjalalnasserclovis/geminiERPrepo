@@ -240,13 +240,18 @@ export async function updateStonizExpenseAction(
   // Charger l'existant (avant + vérif owner)
   const { data: existing, error: loadErr } = await supabase
     .from('stoniz_wallet_expenses')
-    .select('id, wallet_id, created_by, deleted_at, amount_mad, description, expense_type, category, project_id, observations')
+    .select('id, wallet_id, created_by, deleted_at, is_validated, amount_mad, description, expense_type, category, project_id, observations')
     .eq('id', id)
     .maybeSingle();
   if (loadErr) return { ok: false, error: loadErr.message };
   if (!existing) return { ok: false, error: 'Dépense introuvable.' };
   if ((existing as any).deleted_at) {
     return { ok: false, error: 'Cette dépense a été supprimée. Restaurez-la avant d\'éditer.' };
+  }
+
+  // Si la dépense est déjà validée par le CEO, seul le CEO peut la modifier
+  if ((existing as any).is_validated && user.role !== 'ceo') {
+    return { ok: false, error: 'Cette dépense a été validée par le CEO. Seul le CEO peut la modifier.' };
   }
 
   // Garde owner pour non-CEO (la RLS bloque aussi, mais on veut un message clair)
@@ -303,13 +308,16 @@ export async function softDeleteStonizExpenseAction(
 
   const { data: existing, error: loadErr } = await supabase
     .from('stoniz_wallet_expenses')
-    .select('id, wallet_id, created_by, deleted_at, amount_mad, description, category, expense_type')
+    .select('id, wallet_id, created_by, deleted_at, is_validated, amount_mad, description, category, expense_type')
     .eq('id', id)
     .maybeSingle();
   if (loadErr) return { ok: false, error: loadErr.message };
   if (!existing) return { ok: false, error: 'Dépense introuvable.' };
   if ((existing as any).deleted_at) {
     return { ok: false, error: 'Cette dépense est déjà supprimée.' };
+  }
+  if ((existing as any).is_validated && user.role !== 'ceo') {
+    return { ok: false, error: 'Cette dépense a été validée par le CEO. Seul le CEO peut la supprimer.' };
   }
   if (user.role !== 'ceo' && (existing as any).created_by !== user.id) {
     return { ok: false, error: 'Tu ne peux supprimer que les opérations que tu as créées toi-même.' };

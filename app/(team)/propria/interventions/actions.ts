@@ -513,6 +513,11 @@ export async function startInterventionAction(
   try {
     user = await assertRole(FIELD_OR_OFFICE);
     const { supabase, intervention } = await loadInterventionForActor(user, id);
+    const currentStatus = (intervention as any)?.status;
+    if (currentStatus === 'cloture' || currentStatus === 'annule') {
+      throw new Error('Cette intervention est clôturée ou annulée. Utilisez la réouverture back-office si nécessaire.');
+    }
+
     const update: any = { status: 'en_cours' };
     if (!(intervention as any)?.started_at) {
       update.started_at = new Date().toISOString();
@@ -564,7 +569,11 @@ export async function submitForValidationAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const user = await assertRole(FIELD_OR_OFFICE);
-    const { supabase } = await loadInterventionForActor(user, id);
+    const { supabase, intervention } = await loadInterventionForActor(user, id);
+    const currentStatus = (intervention as any)?.status;
+    if (currentStatus === 'cloture' || currentStatus === 'annule') {
+      throw new Error('Cette intervention est clôturée ou annulée et ne peut pas être soumise pour validation.');
+    }
 
     const { count } = await supabase
       .from('propria_intervention_proofs')

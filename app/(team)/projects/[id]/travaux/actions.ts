@@ -692,10 +692,39 @@ export async function bulkChangeTravauxStatusAction(input: unknown) {
   const { lot_ids, status } = parsed.data;
   const supabase = createClient();
 
+  // Gate : pour passer en demarre/en_cours/en_attente/termine, exiger une facture artisan sur chaque lot
+  if (STATUSES_REQUIRING_FACTURE.includes(status)) {
+    const { data: lotsToCheck } = await supabase
+      .from('travaux_lots')
+      .select('id, numero, artisan_name, status')
+      .in('id', lot_ids)
+      .is('deleted_at', null);
+
+    for (const lot of (lotsToCheck ?? []) as any[]) {
+      const wasNotActive = !STATUSES_REQUIRING_FACTURE.includes(lot.status);
+      if (wasNotActive) {
+        const { count: factureCount } = await supabase
+          .from('documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('lot_id', lot.id)
+          .eq('type', 'facture_artisan')
+          .is('deleted_at', null);
+
+        if (!factureCount || factureCount === 0) {
+          return {
+            ok: false as const,
+            error: `Impossible de passer le lot #${lot.numero} (${lot.artisan_name ?? 'artisan'}) en « ${status} » : aucune facture artisan n'est uploadée pour ce lot. Ajoutez d'abord la facture dans le panneau du lot.`,
+          };
+        }
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('travaux_lots')
     .update({ status } as any)
-    .in('id', lot_ids);
+    .in('id', lot_ids)
+    .is('deleted_at', null);
   if (error) return { ok: false as const, error: error.message };
 
   for (const id of lot_ids) {

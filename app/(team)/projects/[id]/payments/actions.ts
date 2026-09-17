@@ -26,6 +26,14 @@ export async function updatePaymentAction(input: unknown) {
   const canEditDueDate = user.role === 'ceo' || user.role === 'chef_projet' || user.role === 'finance';
   const canEditAmountExpected = user.role === 'ceo' || user.role === 'finance';
 
+  // Lire l'état AVANT pour le diff et les gardes-fous
+  const { data: before } = await supabase
+    .from('payments')
+    .select('status, amount_paid, paid_at, payment_method, notes, due_date, amount_expected')
+    .eq('id', parsed.data.payment_id)
+    .single();
+  if (!before) return { ok: false, error: 'Paiement introuvable' };
+
   const patch: Record<string, unknown> = {
     amount_paid: parsed.data.amount_paid,
     paid_at: parsed.data.paid_at || null,
@@ -39,12 +47,7 @@ export async function updatePaymentAction(input: unknown) {
 
   if (canEditAmountExpected && parsed.data.amount_expected != null) {
     // Garde-fou : impossible de descendre sous le déjà encaissé pour ce payment.
-    const { data: current } = await supabase
-      .from('payments')
-      .select('amount_paid')
-      .eq('id', parsed.data.payment_id)
-      .single();
-    const paid = Number(current?.amount_paid ?? 0);
+    const paid = Number(before.amount_paid ?? 0);
     if (Number(parsed.data.amount_expected) < paid) {
       return {
         ok: false,
@@ -54,19 +57,25 @@ export async function updatePaymentAction(input: unknown) {
     patch.amount_expected = parsed.data.amount_expected;
   }
 
-  // Lire l'état AVANT pour le diff
-  const { data: before } = await supabase
-    .from('payments')
-    .select('amount_paid, paid_at, payment_method, notes, due_date, amount_expected')
-    .eq('id', parsed.data.payment_id)
-    .single();
+  // Synchronise le statut selon amount_paid et amount_expected
+  const effectiveExpected = patch.amount_expected != null
+    ? Number(patch.amount_expected)
+    : Number(before.amount_expected ?? 0);
+  const effectivePaid = Number(parsed.data.amount_paid ?? before.amount_paid ?? 0);
+  if (effectivePaid >= effectiveExpected && effectiveExpected > 0) {
+    patch.status = 'paid';
+  } else if (effectivePaid > 0) {
+    patch.status = 'partial';
+  } else {
+    patch.status = 'pending';
+  }
 
   const { error } = await supabase.from('payments').update(patch).eq('id', parsed.data.payment_id);
   if (error) return { ok: false, error: error.message };
 
   // Détection bascule planifié → reçu : amount_paid passe de 0/null à > 0
   const becamePaid = (Number((before as any)?.amount_paid ?? 0) === 0) && Number(parsed.data.amount_paid ?? 0) > 0;
-  const fields = ['amount_paid','paid_at','payment_method','notes'];
+  const fields = ['amount_paid','paid_at','payment_method','notes','status'];
   if (canEditDueDate && parsed.data.due_date !== undefined) fields.push('due_date');
   if (canEditAmountExpected && parsed.data.amount_expected != null) fields.push('amount_expected');
   const diff = computeFinanceDiff(before as any, patch as any, fields);

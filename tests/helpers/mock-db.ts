@@ -23,7 +23,10 @@ export class MockQueryBuilder {
     }
   }
 
-  select(_fields = "*") {
+  private selectFields: string = "*";
+
+  select(fields = "*") {
+    this.selectFields = fields;
     return this;
   }
 
@@ -70,7 +73,8 @@ export class MockQueryBuilder {
       id: item.id || crypto.randomUUID(),
       created_at: item.created_at || new Date().toISOString(),
       ...(this.tableName === 'projects' ? { phase: item.phase || 'onboarding' } : {}),
-      ...(this.tableName === 'payment_approvals' ? { status: item.status || 'pending', finance_status: item.finance_status || 'pending' } : {}),
+      ...(this.tableName === 'payment_approvals' ? { status: item.status || 'pending', finance_status: item.finance_status || 'pending', ceo_status: item.ceo_status || 'pending', final_status: item.final_status || 'pending' } : {}),
+      ...(this.tableName === 'travaux_payments' || this.tableName === 'achats_payments' || this.tableName === 'payments' ? { status: item.status || 'pending' } : {}),
       ...item,
     }));
     table.push(...inserted);
@@ -210,7 +214,14 @@ export class MockQueryBuilder {
     let rows = table.filter((r) => this.filters.every((f) => f(r)));
 
     if (this.updatePatch) {
-      rows.forEach((r) => Object.assign(r, this.updatePatch, { updated_at: new Date().toISOString() }));
+      rows.forEach((r) => {
+        Object.assign(r, this.updatePatch, { updated_at: new Date().toISOString() });
+        if (this.tableName === 'payment_approvals') {
+          if (r.ceo_status === 'approved') r.final_status = 'approved';
+          else if (r.ceo_status === 'rejected' || r.finance_status === 'rejected') r.final_status = 'rejected';
+          else r.final_status = 'pending';
+        }
+      });
       if (this.isSingle) {
         if (rows.length === 0) {
           return { data: null, error: { message: `Record not found in ${this.tableName}`, code: "PGRST116" } };
@@ -224,6 +235,34 @@ export class MockQueryBuilder {
       const remaining = table.filter((r) => !this.filters.every((f) => f(r)));
       this.db[this.tableName] = remaining;
       return { data: rows, error: null };
+    }
+
+    if (this.selectFields && this.selectFields !== '*') {
+      const relationRegex = /([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)\(([^)]+)\)/g;
+      let match;
+      while ((match = relationRegex.exec(this.selectFields)) !== null) {
+        const alias = match[1];
+        const foreignTable = match[2];
+        const requestedCols = match[3].split(',').map((c) => c.trim());
+        const foreignRows = this.db[foreignTable] || [];
+
+        rows.forEach((row) => {
+          if (!row[alias]) {
+            const fkKey = row[`${alias}_id`] !== undefined ? `${alias}_id` : `${foreignTable.replace(/s$/, '')}_id`;
+            const fkVal = row[fkKey];
+            if (fkVal) {
+              const matched = foreignRows.find((fr) => fr.id === fkVal);
+              if (matched) {
+                const sub: any = {};
+                requestedCols.forEach((col) => {
+                  sub[col] = matched[col];
+                });
+                row[alias] = sub;
+              }
+            }
+          }
+        });
+      }
     }
 
     if (this.orderField) {
@@ -268,6 +307,25 @@ export function createMockSupabase(initialState: MockDbState = {}) {
       if (fnName === 'advance_project_phase' && args?.p_project_id && args?.p_new_phase) {
         const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
         if (prj) prj.phase = args.p_new_phase;
+      }
+      if (fnName === 'check_artisan_payment_ready' && args?.p_artisan_id) {
+        const artisan = db.artisans?.find((a: any) => a.id === args.p_artisan_id);
+        if (!artisan) return { data: 'Artisan introuvable', error: null };
+        const missing: string[] = [];
+        if (!artisan.bank_name || !String(artisan.bank_name).trim()) missing.push('bank_name');
+        if (!artisan.rib || !String(artisan.rib).trim()) missing.push('rib');
+        const isIndep = artisan.legal_form === 'auto_entrepreneur' || artisan.legal_form === 'personne_physique';
+        if (!isIndep) {
+          const docs = db.documents || [];
+          const hasRibDoc = docs.some((d: any) => d.artisan_id === args.p_artisan_id && d.type === 'attestation_rib' && !d.deleted_at);
+          const hasFiscale = docs.some((d: any) => d.artisan_id === args.p_artisan_id && d.type === 'attestation_regularite_fiscale' && !d.deleted_at);
+          if (!hasRibDoc) missing.push('attestation_rib');
+          if (!hasFiscale) missing.push('attestation_regularite_fiscale');
+        }
+        if (missing.length > 0) {
+          return { data: `Fiche artisan incomplète pour paiement. Manquant : ${missing.join(', ')}`, error: null };
+        }
+        return { data: null, error: null };
       }
       return { data: { success: true, fn: fnName, args }, error: null };
     }),

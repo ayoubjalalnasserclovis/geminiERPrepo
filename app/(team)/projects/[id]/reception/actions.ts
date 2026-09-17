@@ -298,9 +298,12 @@ export async function convertActionToInterventionAction(actionId: string, projec
   // Récupère l'action + le projet pour avoir le property_id
   const { data: action } = await supabase
     .from('project_vct_corrective_actions')
-    .select('id, description, artisan_id, deadline, project_id')
+    .select('id, description, artisan_id, deadline, project_id, intervention_id')
     .eq('id', actionId).single();
   if (!action) throw new Error('Action introuvable');
+  if ((action as any).intervention_id) {
+    throw new Error('Cette action corrective a déjà été convertie en intervention.');
+  }
 
   const { data: project } = await supabase
     .from('projects')
@@ -607,6 +610,16 @@ export async function sendPvToClientAction(pvId: string, projectId: string) {
   await assertRole(['ceo','chef_projet']);
   const supabase = createClient();
 
+  const { data: currentPv } = await supabase
+    .from('project_reception_pvs')
+    .select('id, status')
+    .eq('id', pvId)
+    .single();
+  if (!currentPv) throw new Error('PV introuvable');
+  if (currentPv.status === 'validated') {
+    throw new Error('Ce PV a déjà été validé et signé par le client.');
+  }
+
   const { error } = await supabase
     .from('project_reception_pvs')
     .update({
@@ -793,6 +806,17 @@ export async function clientSignPvAction(formData: FormData) {
   if (!user) throw new Error('Non authentifié');
 
   const data = signPvSchema.parse(clean(Object.fromEntries(formData)));
+
+  // Vérifie l'état actuel du PV : doit être envoyé au client et non déjà validé
+  const { data: currentPv } = await supabase
+    .from('project_reception_pvs')
+    .select('id, status, project_id')
+    .eq('id', data.pv_id)
+    .maybeSingle();
+  if (!currentPv) throw new Error('PV introuvable');
+  if (currentPv.status !== 'sent_to_client') {
+    throw new Error('Le PV doit être au statut "sent_to_client" pour pouvoir être signé.');
+  }
 
   // Capture IP + UA (best effort)
   const { headers } = await import('next/headers');

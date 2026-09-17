@@ -13,6 +13,7 @@ import { sendEmail } from '@/lib/email/send';
 import {
   POLICE_RECORDS_TABLE,
   computeMissingFields,
+  computeNextStatus,
   normalizeAccompanyingPersons,
   pullDataFromHostawayReservation,
   pullDataFromDirectReservation,
@@ -159,7 +160,7 @@ export async function createPoliceRecordAction(
 
   const insertRow = {
     ...merged,
-    status: 'draft',
+    status: computeNextStatus(merged, 'draft'),
     created_by: user.id,
   };
 
@@ -211,7 +212,7 @@ export async function updatePoliceRecordAction(
   // Bloque la modif d'une fiche déjà soumise ou archivée (sauf CEO).
   const { data: before } = await supabase
     .from(POLICE_RECORDS_TABLE)
-    .select('status')
+    .select('*')
     .eq('id', id)
     .maybeSingle();
   if (!before) return { ok: false, error: 'Fiche introuvable.' };
@@ -223,6 +224,12 @@ export async function updatePoliceRecordAction(
   const updates = sanitizeForDb(parsed.data);
   updates['updated_by'] = user.id;
   updates['updated_at'] = new Date().toISOString();
+
+  // Recalcule le statut naturel si non figé (submitted/archived)
+  if (status !== 'submitted' && status !== 'archived') {
+    const mergedForStatus = { ...before, ...updates };
+    updates['status'] = computeNextStatus(mergedForStatus as any, status as any);
+  }
 
   const { error } = await supabase
     .from(POLICE_RECORDS_TABLE)
