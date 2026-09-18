@@ -61,6 +61,19 @@ async function seedInventoryFromTemplate(inventoryId: string) {
   if (error) throw new Error(`Échec seeding inventaire : ${error.message}`);
 }
 
+async function assertInventoryEditable(supabase: any, inventoryId: string) {
+  const { data: inv } = await supabase
+    .from('propria_inventories')
+    .select('id, status')
+    .eq('id', inventoryId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!inv) throw new Error('Inventaire introuvable');
+  if (inv.status === 'termine') {
+    throw new Error('Cet inventaire est déjà terminé et ne peut plus être modifié.');
+  }
+}
+
 /**
  * Re-applique le seeding sur un inventaire existant.
  * N'ajoute QUE les items du template qui ne sont pas déjà présents.
@@ -68,6 +81,7 @@ async function seedInventoryFromTemplate(inventoryId: string) {
 export async function reseedInventoryAction(inventoryId: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  await assertInventoryEditable(supabase, inventoryId);
 
   const [tplRes, existingRes] = await Promise.all([
     supabase.from('propria_inventory_template_items')
@@ -114,6 +128,8 @@ export async function updateInventoryItemAction(formData: FormData) {
   await assertRole(['ceo','assistante','propria']);
   const data = updateItemSchema.parse(clean(Object.fromEntries(formData)));
   const supabase = createClient();
+  await assertInventoryEditable(supabase, data.inventory_id);
+
   const { error } = await supabase
     .from('propria_inventory_items')
     .update({
@@ -133,6 +149,8 @@ export async function updateInventoryItemAction(formData: FormData) {
 export async function markCategoryAbsentAction(inventoryId: string, category: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  await assertInventoryEditable(supabase, inventoryId);
+
   const { error } = await supabase
     .from('propria_inventory_items')
     .update({ quantity_found: 0, condition: 'manquant' } as any)
@@ -145,6 +163,17 @@ export async function markCategoryAbsentAction(inventoryId: string, category: st
 export async function completeInventoryAction(id: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  const { data: inv } = await supabase
+    .from('propria_inventories')
+    .select('id, status')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!inv) throw new Error('Inventaire introuvable');
+  if (inv.status === 'termine') {
+    throw new Error('Cet inventaire est déjà terminé.');
+  }
+
   const { error } = await supabase
     .from('propria_inventories')
     .update({ status: 'termine' } as any)
@@ -168,6 +197,8 @@ export async function addInventoryItemAction(formData: FormData) {
   await assertRole(['ceo','assistante','propria']);
   const data = itemSchema.parse(clean(Object.fromEntries(formData)));
   const supabase = createClient();
+  await assertInventoryEditable(supabase, data.inventory_id);
+
   const { error } = await supabase.from('propria_inventory_items').insert(data as any);
   if (error) throw new Error(error.message);
   revalidatePath(`/propria/inventaires/${data.inventory_id}`);
@@ -176,6 +207,8 @@ export async function addInventoryItemAction(formData: FormData) {
 export async function deleteInventoryItemAction(itemId: string, inventoryId: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  await assertInventoryEditable(supabase, inventoryId);
+
   const { error } = await supabase.from('propria_inventory_items').delete().eq('id', itemId);
   if (error) throw new Error(error.message);
   revalidatePath(`/propria/inventaires/${inventoryId}`);

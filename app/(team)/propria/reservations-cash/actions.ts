@@ -31,6 +31,16 @@ export async function createCashReservationAction(formData: FormData) {
 export async function markRecoveredAction(id: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  const { data: resa } = await supabase
+    .from('propria_cash_reservations')
+    .select('id, recovered, remitted_to_ceo')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!resa) throw new Error('Réservation cash introuvable.');
+  if (resa.remitted_to_ceo) {
+    throw new Error('Impossible de modifier : le cash a déjà été remis au CEO.');
+  }
   const { error } = await supabase
     .from('propria_cash_reservations')
     .update({
@@ -212,6 +222,19 @@ export async function createCollectTaskAction(input: unknown) {
 export async function markRemittedToCeoAction(id: string) {
   const user = await assertRole(['ceo']);
   const supabase = createClient();
+  const { data: resa } = await supabase
+    .from('propria_cash_reservations')
+    .select('id, recovered, remitted_to_ceo')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!resa) throw new Error('Réservation cash introuvable.');
+  if (resa.remitted_to_ceo) {
+    throw new Error('Cette réservation a déjà été remise au CEO.');
+  }
+  if (!resa.recovered) {
+    throw new Error('Le cash doit d\'abord être marqué comme récupéré auprès du voyageur.');
+  }
   const { error } = await supabase
     .from('propria_cash_reservations')
     .update({

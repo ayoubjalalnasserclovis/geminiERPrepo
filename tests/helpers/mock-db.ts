@@ -75,6 +75,7 @@ export class MockQueryBuilder {
       ...(this.tableName === 'projects' ? { phase: item.phase || 'onboarding' } : {}),
       ...(this.tableName === 'payment_approvals' ? { status: item.status || 'pending', finance_status: item.finance_status || 'pending', ceo_status: item.ceo_status || 'pending', final_status: item.final_status || 'pending' } : {}),
       ...(this.tableName === 'travaux_payments' || this.tableName === 'achats_payments' || this.tableName === 'payments' ? { status: item.status || 'pending' } : {}),
+      ...(this.tableName === 'propria_wallets' ? { is_active: item.is_active !== undefined ? item.is_active : true } : {}),
       ...item,
     }));
     table.push(...inserted);

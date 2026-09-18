@@ -116,12 +116,28 @@ export async function moveLitigeColumnAction(input: unknown) {
   const { litige_id, column } = parsed.data;
   const supabase = createClient();
 
+  const { data: currentLitige } = await supabase
+    .from('propria_litiges')
+    .select('id, kanban_column')
+    .eq('id', litige_id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!currentLitige) return { ok: false as const, error: 'Litige introuvable ou supprimé.' };
+
   const today = new Date().toISOString().slice(0, 10);
   const update: any = { kanban_column: column };
   if (column === 'ticket_ouvert' && !await alreadySet(supabase, litige_id, 'ticket_opened_at')) update.ticket_opened_at = today;
   if (column === 'appel' && !await alreadySet(supabase, litige_id, 'call_started_at')) update.call_started_at = today;
-  if (column === 'gagne') update.won_at = today;
-  if (column === 'perdu') update.lost_at = today;
+  if (column === 'gagne') {
+    update.won_at = today;
+    update.lost_at = null;
+  } else if (column === 'perdu') {
+    update.lost_at = today;
+    update.won_at = null;
+  } else {
+    update.won_at = null;
+    update.lost_at = null;
+  }
 
   const { error } = await supabase.from('propria_litiges').update(update).eq('id', litige_id);
   if (error) return { ok: false as const, error: error.message };
@@ -220,6 +236,17 @@ export async function addLitigeItemAction(formData: FormData): Promise<
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const data = parsed.data;
   const supabase = createClient();
+
+  const { data: currentLitige } = await supabase
+    .from('propria_litiges')
+    .select('id, kanban_column')
+    .eq('id', data.litige_id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!currentLitige) return { ok: false, error: 'Litige introuvable ou supprimé.' };
+  if (currentLitige.kanban_column === 'gagne' || currentLitige.kanban_column === 'perdu') {
+    return { ok: false, error: 'Impossible d\'ajouter un élément à un litige déjà résolu.' };
+  }
 
   const { data: item, error } = await supabase
     .from('propria_litige_items')

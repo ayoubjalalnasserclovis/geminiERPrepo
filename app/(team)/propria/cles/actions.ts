@@ -74,6 +74,13 @@ export async function moveKeyAction(formData: FormData): Promise<Result> {
     const me = await assertRole(['ceo', 'assistante', 'propria']);
     const input = moveKeySchema.parse(Object.fromEntries(formData));
     const supabase = createClient();
+    const { data: key } = await supabase
+      .from('propria_keys')
+      .select('id')
+      .eq('id', input.key_id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!key) return { ok: false, error: 'Jeu de clés introuvable ou retiré.' };
 
     const { error } = await supabase.from('propria_key_movements').insert({
       key_id: input.key_id,

@@ -46,6 +46,15 @@ export async function setUpsellStatusAction(id: string, status: string) {
   const parsed = z.enum(UPSELL_STATUSES).safeParse(status);
   if (!parsed.success) throw new Error('Statut invalide');
   const supabase = createClient();
+  const { data: upsell } = await supabase
+    .from('propria_upsells')
+    .select('id, status')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!upsell) throw new Error('Commande upsell introuvable.');
+  if (upsell.status === parsed.data) return;
+
   const { error } = await supabase
     .from('propria_upsells')
     .update({ status: parsed.data } as any)
@@ -62,6 +71,17 @@ export async function setUpsellAmountAction(id: string, amountMad: number) {
   await assertRole(['ceo', 'assistante', 'propria']);
   const amount = z.coerce.number().min(0).parse(amountMad);
   const supabase = createClient();
+  const { data: upsell } = await supabase
+    .from('propria_upsells')
+    .select('id, status')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!upsell) throw new Error('Commande upsell introuvable.');
+  if (upsell.status === 'annule') {
+    throw new Error('Impossible de modifier le montant d\'un upsell annulé.');
+  }
+
   const { error } = await supabase
     .from('propria_upsells')
     .update({ amount_mad: amount } as any)

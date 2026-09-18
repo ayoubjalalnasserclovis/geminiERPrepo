@@ -64,6 +64,18 @@ export async function closeWalletAction(walletId: string): Promise<ActionResult>
   }
 }
 
+async function assertWalletActive(supabase: any, walletId: string) {
+  const { data: wallet } = await supabase
+    .from('propria_wallets')
+    .select('id, is_active')
+    .eq('id', walletId)
+    .maybeSingle();
+  if (!wallet) throw new Error('Caisse introuvable.');
+  if (wallet.is_active === false) {
+    throw new Error('Cette caisse est clôturée et ne peut plus enregistrer d\'opérations.');
+  }
+}
+
 // ─── Dotations ──────────────────────────────────────────────────────────────
 
 const dotationSchema = z.object({
@@ -80,6 +92,8 @@ export async function createDotationAction(formData: FormData): Promise<ActionRe
     const user = await assertRole(['ceo']);
     const data = dotationSchema.parse(clean(Object.fromEntries(formData)));
     const supabase = createClient();
+    await assertWalletActive(supabase, data.wallet_id);
+
     const { error } = await supabase
       .from('propria_wallet_dotations')
       .insert({ ...data, given_by: user.id } as any);
@@ -119,6 +133,7 @@ export async function createExpenseAction(formData: FormData): Promise<ActionRes
 
     const data = expenseSchema.parse(clean(Object.fromEntries(formData)));
     const supabase = createClient();
+    await assertWalletActive(supabase, data.wallet_id);
 
     // 1) Crée la dépense pour obtenir son id (nécessaire pour le storage path)
     const { data: row, error } = await supabase
