@@ -90,6 +90,18 @@ export async function reopenStonizWalletAction(walletId: string) {
   revalidatePath(`/caisse-stoniz/${walletId}`);
 }
 
+async function assertStonizWalletActive(supabase: ReturnType<typeof createClient>, walletId: string) {
+  const { data: wallet } = await supabase
+    .from('stoniz_wallets')
+    .select('id, is_active')
+    .eq('id', walletId)
+    .maybeSingle();
+  if (!wallet) throw new Error('Caisse introuvable.');
+  if (wallet.is_active === false) {
+    throw new Error('Cette caisse est clôturée et ne peut plus enregistrer d\'opérations.');
+  }
+}
+
 // ─── Dotations ──────────────────────────────────────────────────────────────
 
 const dotationSchema = z.object({
@@ -105,6 +117,8 @@ export async function createStonizDotationAction(formData: FormData) {
   const user = await assertRole(['ceo']);
   const data = dotationSchema.parse(clean(Object.fromEntries(formData)));
   const supabase = createClient();
+  await assertStonizWalletActive(supabase, data.wallet_id);
+
   const { error } = await supabase
     .from('stoniz_wallet_dotations')
     .insert({ ...data, given_by: user.id } as any);
@@ -141,6 +155,7 @@ export async function createStonizExpenseAction(formData: FormData) {
 
   const data = expenseSchema.parse(clean(Object.fromEntries(formData)));
   const supabase = createClient();
+  await assertStonizWalletActive(supabase, data.wallet_id);
 
   // 1) Insert la dépense pour obtenir son id
   //    created_by est OBLIGATOIRE (WITH CHECK created_by = auth.uid()).

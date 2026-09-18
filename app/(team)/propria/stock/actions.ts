@@ -190,6 +190,16 @@ export async function adjustStockAction(input: {
 
   const supabase = createClient();
 
+  const { data: consumable } = await supabase
+    .from('propria_consumables')
+    .select('id, is_active')
+    .eq('id', input.consumable_id)
+    .maybeSingle();
+  if (!consumable) return { ok: false, error: 'Article introuvable' };
+  if (consumable.is_active === false) {
+    return { ok: false, error: 'Cet article est archivé et ne peut pas faire l\'objet d\'ajustement de stock.' };
+  }
+
   // Récupère le stock courant via la vue
   const { data: status } = await supabase
     .from('propria_stock_status')
@@ -259,6 +269,16 @@ export async function createMovementAction(formData: FormData) {
   const data = movementSchema.parse(clean(Object.fromEntries(formData)));
   const supabase = createClient();
 
+  const { data: cons } = await supabase
+    .from('propria_consumables')
+    .select('id, is_active, unit_price_mad')
+    .eq('id', data.consumable_id)
+    .maybeSingle();
+  if (!cons) throw new Error('Article introuvable');
+  if (cons.is_active === false) {
+    throw new Error('Cet article est archivé et ne peut plus faire l\'objet de mouvements de stock.');
+  }
+
   // Règles métier sur le prix :
   // - Sortie / Ajustement : pas de prix saisi (valorisation auto depuis la fiche produit)
   // - Entrée : si l'utilisateur n'a rien saisi, on retombe sur le prix catalogue
@@ -266,11 +286,6 @@ export async function createMovementAction(formData: FormData) {
   if (data.movement_type !== 'entree') {
     unitPrice = null;
   } else if (unitPrice == null) {
-    const { data: cons } = await supabase
-      .from('propria_consumables')
-      .select('unit_price_mad')
-      .eq('id', data.consumable_id)
-      .single();
     unitPrice = cons?.unit_price_mad ?? null;
   }
 

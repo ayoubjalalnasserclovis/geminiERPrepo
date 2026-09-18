@@ -8,6 +8,16 @@ import { defaultChecklist, type ChecklistSection } from '@/lib/propria/maintenan
 export async function planVisitAction(visitId: string, scheduledAt: string, responsableId: string | null) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  const { data: visit } = await supabase
+    .from('propria_maintenance_visits')
+    .select('id, status')
+    .eq('id', visitId)
+    .maybeSingle();
+  if (!visit) throw new Error('Visite introuvable');
+  if (visit.status === 'realise') {
+    throw new Error('Impossible de replanifier une visite déjà réalisée.');
+  }
+
   const { error } = await supabase
     .from('propria_maintenance_visits')
     .update({
@@ -29,6 +39,16 @@ export async function saveChecklistAction(
 ) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  const { data: visit } = await supabase
+    .from('propria_maintenance_visits')
+    .select('id, status')
+    .eq('id', visitId)
+    .maybeSingle();
+  if (!visit) throw new Error('Visite introuvable');
+  if (visit.status === 'realise') {
+    throw new Error('Impossible de modifier la checklist d\'une visite déjà réalisée.');
+  }
+
   const { error } = await supabase
     .from('propria_maintenance_visits')
     .update({ checklist, notes } as any)
@@ -40,6 +60,16 @@ export async function saveChecklistAction(
 export async function completeVisitAction(visitId: string) {
   await assertRole(['ceo','assistante','propria']);
   const supabase = createClient();
+  const { data: visit } = await supabase
+    .from('propria_maintenance_visits')
+    .select('id, status')
+    .eq('id', visitId)
+    .maybeSingle();
+  if (!visit) throw new Error('Visite introuvable');
+  if (visit.status === 'realise') {
+    throw new Error('Cette visite est déjà réalisée.');
+  }
+
   const { error } = await supabase
     .from('propria_maintenance_visits')
     .update({ status: 'realise', completed_at: new Date().toISOString() } as any)

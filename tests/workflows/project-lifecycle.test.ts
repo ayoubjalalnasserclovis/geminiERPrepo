@@ -64,7 +64,13 @@ vi.mock('@/lib/email/templates', () => ({
   sendPaymentReceivedToClient: vi.fn().mockResolvedValue(true),
 }));
 
-import { createProjectAction, updateProjectChefAction, advancePhaseAction } from '@/app/(team)/projects/actions';
+import {
+  createProjectAction,
+  updateProjectChefAction,
+  advancePhaseAction,
+  revertPhaseAction,
+  deleteProjectAction,
+} from '@/app/(team)/projects/actions';
 import { createLotAction } from '@/app/(team)/projects/[id]/travaux/actions';
 import { createAchatLotAction } from '@/app/(team)/projects/[id]/achats/actions';
 import { requestApprovalAction, financeReviewAction } from '@/app/(team)/validations/actions';
@@ -241,5 +247,60 @@ describe('Workflow E2E: Full Project Lifecycle', () => {
 
     const prop = mockSupabase.db.properties.find((p: any) => p.id === PROPERTY_ID);
     expect(prop.propria_managed_at).toBeDefined();
+  });
+
+  it('Phase Reversion Workflow: Advance phase -> Revert step -> Verify clean rollback', async () => {
+    // 1. Create project
+    const createRes = await createProjectAction({
+      client_id: CLIENT_ID,
+      title: 'Projet Test Rollback',
+      budget_total: 1000000,
+      city: 'Casablanca',
+    });
+    expect(createRes.ok).toBe(true);
+    if (!createRes.ok) return;
+    const testPrjId = createRes.id;
+
+    // 2. Advance to sourcing then design
+    setMockUser('chef_projet', CHEF_ID);
+    await advancePhaseAction({ project_id: testPrjId, new_phase: 'sourcing' });
+    await advancePhaseAction({ project_id: testPrjId, new_phase: 'design' });
+
+    let prj = mockSupabase.db.projects.find((p: any) => p.id === testPrjId);
+    expect(prj.phase).toBe('design');
+
+    // 3. Revert phase back to sourcing
+    const revRes = await revertPhaseAction(testPrjId);
+    expect(revRes.ok).toBe(true);
+    prj = mockSupabase.db.projects.find((p: any) => p.id === testPrjId);
+    expect(prj.phase).toBe('sourcing');
+  });
+
+  it('Chef Reassignment and Project Soft-Deletion Workflow', async () => {
+    // 1. Create project
+    const createRes = await createProjectAction({
+      client_id: CLIENT_ID,
+      title: 'Projet Reassignment',
+      budget_total: 2000000,
+      city: 'Rabat',
+    });
+    expect(createRes.ok).toBe(true);
+    if (!createRes.ok) return;
+    const testPrjId = createRes.id;
+
+    // 2. Reassign chef de projet
+    const assignRes = await updateProjectChefAction({ project_id: testPrjId, chef_id: CHEF_ID });
+    expect(assignRes.ok).toBe(true);
+
+    let prj = mockSupabase.db.projects.find((p: any) => p.id === testPrjId);
+    expect(prj.assigned_chef_projet).toBe(CHEF_ID);
+
+    // 3. CEO soft-deletes project
+    setMockUser('ceo', CEO_ID);
+    const delRes = await deleteProjectAction(testPrjId);
+    expect(delRes.ok).toBe(true);
+
+    prj = mockSupabase.db.projects.find((p: any) => p.id === testPrjId);
+    expect(prj.deleted_at).toBeDefined();
   });
 });

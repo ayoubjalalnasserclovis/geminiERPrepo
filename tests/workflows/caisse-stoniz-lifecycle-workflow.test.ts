@@ -184,4 +184,67 @@ describe('Multi-Step Workflow: Caisse Stoniz -> Wallet Lifecycle -> Dotation -> 
     expect(wallets[0].is_active).toBe(true);
     expect(wallets[0].closed_at).toBeNull();
   });
+
+  it('Batch validation flow: CEO validates all pending expenses in one click', async () => {
+    // 1. Create wallet
+    const fdWallet = new FormData();
+    fdWallet.set('profile_id', SOURCING_USER_ID);
+    fdWallet.set('label', 'Caisse Chantiers Agadir');
+    await createStonizWalletAction(fdWallet);
+    const walletId = mockSupabase.db.stoniz_wallets[0].id;
+
+    // 2. Sourcing creates 3 expenses with receipts
+    for (let i = 1; i <= 3; i++) {
+      const dummyFile = new File([`ticket ${i}`], `receipt_${i}.jpg`, { type: 'image/jpeg' });
+      const fd = new FormData();
+      fd.set('wallet_id', walletId);
+      fd.set('spent_at', '2026-09-18');
+      fd.set('expense_type', 'achat');
+      fd.set('description', `Fourniture chantier #${i}`);
+      fd.set('amount_mad', String(500 * i));
+      fd.set('receipt_file', dummyFile);
+      await createStonizExpenseAction(fd);
+    }
+    expect(mockSupabase.db.stoniz_wallet_expenses).toHaveLength(3);
+
+    // 3. CEO executes batch validation
+    setMockUser('ceo', CEO_USER_ID);
+    await validateAllStonizExpensesForWalletAction(walletId);
+
+    expect(mockSupabase.db.stoniz_wallet_expenses.every((e: any) => e.is_validated)).toBe(true);
+    expect(mockSupabase.db.stoniz_wallet_expenses.every((e: any) => e.validated_by === CEO_USER_ID)).toBe(true);
+  });
+
+  it('Closed wallet protection: Block operations when wallet is closed', async () => {
+    // 1. Create and close wallet
+    const fdWallet = new FormData();
+    fdWallet.set('profile_id', SOURCING_USER_ID);
+    fdWallet.set('label', 'Caisse Éphémère');
+    await createStonizWalletAction(fdWallet);
+    const walletId = mockSupabase.db.stoniz_wallets[0].id;
+
+    setMockUser('ceo', CEO_USER_ID);
+    await closeStonizWalletAction(walletId);
+    expect(mockSupabase.db.stoniz_wallets[0].is_active).toBe(false);
+
+    // 2. Attempting dotation on closed wallet must throw
+    const fdDotation = new FormData();
+    fdDotation.set('wallet_id', walletId);
+    fdDotation.set('given_at', '2026-09-18');
+    fdDotation.set('amount_mad', '5000');
+    fdDotation.set('type', 'dotation');
+
+    await expect(createStonizDotationAction(fdDotation)).rejects.toThrow();
+
+    // 3. Attempting expense on closed wallet must throw
+    setMockUser('sourcing', SOURCING_USER_ID);
+    const fdExpense = new FormData();
+    fdExpense.set('wallet_id', walletId);
+    fdExpense.set('spent_at', '2026-09-18');
+    fdExpense.set('expense_type', 'achat');
+    fdExpense.set('description', 'Achat sur caisse fermée');
+    fdExpense.set('amount_mad', '300');
+
+    await expect(createStonizExpenseAction(fdExpense)).rejects.toThrow();
+  });
 });

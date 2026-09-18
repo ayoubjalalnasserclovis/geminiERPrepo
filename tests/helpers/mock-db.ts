@@ -75,7 +75,8 @@ export class MockQueryBuilder {
       ...(this.tableName === 'projects' ? { phase: item.phase || 'onboarding' } : {}),
       ...(this.tableName === 'payment_approvals' ? { status: item.status || 'pending', finance_status: item.finance_status || 'pending', ceo_status: item.ceo_status || 'pending', final_status: item.final_status || 'pending' } : {}),
       ...(this.tableName === 'travaux_payments' || this.tableName === 'achats_payments' || this.tableName === 'payments' ? { status: item.status || 'pending' } : {}),
-      ...(this.tableName === 'propria_wallets' ? { is_active: item.is_active !== undefined ? item.is_active : true } : {}),
+      ...(this.tableName === 'propria_wallets' || this.tableName === 'stoniz_wallets' ? { is_active: item.is_active !== undefined ? item.is_active : true } : {}),
+      ...(this.tableName === 'stoniz_wallet_expenses' ? { is_validated: item.is_validated !== undefined ? item.is_validated : false } : {}),
       ...item,
     }));
     table.push(...inserted);
@@ -309,6 +310,18 @@ export function createMockSupabase(initialState: MockDbState = {}) {
         const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
         if (prj) prj.phase = args.p_new_phase;
       }
+      if (fnName === 'revert_project_phase' && args?.p_project_id) {
+        const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
+        const phases = ['onboarding', 'sourcing', 'design', 'compromis', 'acte', 'travaux', 'livraison', 'termine'];
+        if (prj) {
+          const idx = phases.indexOf(prj.phase);
+          if (idx > 0) {
+            prj.phase = phases[idx - 1];
+            return { data: { new_phase: prj.phase }, error: null };
+          }
+        }
+        return { data: { new_phase: prj?.phase }, error: null };
+      }
       if (fnName === 'check_artisan_payment_ready' && args?.p_artisan_id) {
         const artisan = db.artisans?.find((a: any) => a.id === args.p_artisan_id);
         if (!artisan) return { data: 'Artisan introuvable', error: null };
@@ -328,6 +341,61 @@ export function createMockSupabase(initialState: MockDbState = {}) {
         }
         return { data: null, error: null };
       }
+      if (fnName === 'propria_generate_maintenance_visits') {
+        return { data: 4, error: null };
+      }
+      if (fnName === 'send_proposal') {
+        const id = crypto.randomUUID();
+        if (!db.property_proposals) db.property_proposals = [];
+        db.property_proposals.push({
+          id,
+          project_id: args.p_project_id,
+          property_id: args.p_property_id,
+          status: 'sent',
+        });
+        const prop = db.properties?.find((p: any) => p.id === args.p_property_id);
+        if (prop) prop.status = 'propose';
+        return { data: { proposal_id: id }, error: null };
+      }
+      if (fnName === 'select_final_property') {
+        const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
+        if (prj) prj.property_id = args.p_property_id;
+        const prop = db.properties?.find((p: any) => p.id === args.p_property_id);
+        if (prop) prop.status = 'reserve';
+        return { data: null, error: null };
+      }
+      if (fnName === 'select_final_property_on_behalf') {
+        const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
+        if (prj) {
+          prj.property_id = args.p_property_id;
+          prj.property_selected_on_behalf = true;
+          prj.property_selected_on_behalf_reason = args.p_reason;
+        }
+        const prop = db.properties?.find((p: any) => p.id === args.p_property_id);
+        if (prop) prop.status = 'reserve';
+        return { data: null, error: null };
+      }
+      if (fnName === 'unselect_final_property') {
+        const prj = db.projects?.find((p: any) => p.id === args.p_project_id);
+        if (prj) {
+          const oldProp = db.properties?.find((p: any) => p.id === prj.property_id);
+          if (oldProp && oldProp.status === 'reserve') oldProp.status = 'disponible';
+          prj.property_id = null;
+          prj.property_selected_on_behalf = false;
+          prj.property_selected_on_behalf_reason = null;
+        }
+        return { data: null, error: null };
+      }
+      if (fnName === 'respond_to_proposal') {
+        const prop = db.property_proposals?.find((p: any) => p.id === args.p_proposal_id);
+        if (prop) {
+          prop.status = args.p_response;
+          prop.client_response = args.p_response;
+          prop.client_message = args.p_message;
+          prop.refusal_reason = args.p_refusal_reason;
+        }
+        return { data: { success: true }, error: null };
+      }
       return { data: { success: true, fn: fnName, args }, error: null };
     }),
     auth: {
@@ -336,13 +404,13 @@ export function createMockSupabase(initialState: MockDbState = {}) {
         error: null,
       })),
       admin: {
-        inviteUserByEmail: vi.fn().mockResolvedValue({
-          data: { user: { id: "usr-invited-1", email: "test@example.com" } },
+        inviteUserByEmail: vi.fn().mockImplementation(async (email: string, options?: any) => ({
+          data: { user: { id: "99999999-1111-2222-3333-444444444444", email: email ?? "test@example.com" } },
           error: null,
-        }),
+        })),
         deleteUser: vi.fn().mockResolvedValue({ error: null }),
         getUserById: vi.fn().mockResolvedValue({
-          data: { user: { id: "usr-invited-1", email: "test@example.com", last_sign_in_at: null } },
+          data: { user: { id: "99999999-1111-2222-3333-444444444444", email: "test@example.com", last_sign_in_at: null } },
           error: null,
         }),
         generateLink: vi.fn().mockResolvedValue({

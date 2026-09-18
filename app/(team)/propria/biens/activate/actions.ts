@@ -157,6 +157,8 @@ export async function activatePropriaForProjectAction(formData: FormData) {
   const syndicToPay = data.propria_syndic_to_pay === 'on' || data.propria_syndic_to_pay === 'true';
   const updates: Record<string, any> = {
     propria_managed_at: new Date().toISOString(),
+    propria_refused_at: null,
+    propria_refused_reason: null,
     propria_internal_code: data.propria_internal_code,
     propria_owner_name: data.propria_owner_name,
     propria_owner_phone: data.propria_owner_phone,

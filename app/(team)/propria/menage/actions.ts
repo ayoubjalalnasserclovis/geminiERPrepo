@@ -215,6 +215,10 @@ export async function startCleaningAction(
     const supabase = createClient();
     const { data: before } = await supabase
       .from('propria_cleanings').select('status, started_at').eq('id', id).single();
+    if (!before) throw new Error('Ménage introuvable');
+    if ((before as any).status === 'cloture' || (before as any).status === 'annule') {
+      throw new Error('Ce ménage est clôturé ou annulé. Utilisez la réouverture back-office si nécessaire.');
+    }
     const update: any = { status: 'en_cours' };
     if (!(before as any)?.started_at) {
       update.started_at = new Date().toISOString();
@@ -241,6 +245,13 @@ export async function submitCleaningForValidationAction(
   try {
     const user = await assertRole(FIELD_OR_OFFICE);
     const supabase = createClient();
+    const { data: clean } = await supabase
+      .from('propria_cleanings').select('status').eq('id', id).single();
+    if (!clean) throw new Error('Ménage introuvable');
+    if ((clean as any).status === 'cloture' || (clean as any).status === 'annule') {
+      throw new Error('Ce ménage est clôturé ou annulé et ne peut pas être soumis pour validation.');
+    }
+
     const { count } = await supabase
       .from('propria_cleaning_proofs')
       .select('id', { count: 'exact', head: true })
