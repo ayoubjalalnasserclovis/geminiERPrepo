@@ -226,11 +226,11 @@ export class MockQueryBuilder {
       });
       if (this.isSingle) {
         if (rows.length === 0) {
-          return { data: null, error: { message: `Record not found in ${this.tableName}`, code: "PGRST116" } };
+          return { data: null, count: 0, error: { message: `Record not found in ${this.tableName}`, code: "PGRST116" } };
         }
-        return { data: rows[0], error: null };
+        return { data: rows[0], count: rows.length, error: null };
       }
-      return { data: rows[0] || null, error: null };
+      return { data: rows[0] || null, count: rows.length, error: null };
     }
 
     if (this.isDelete) {
@@ -285,14 +285,14 @@ export class MockQueryBuilder {
       if (rows.length === 0) {
         return { data: null, count: 0, error: { message: `Record not found in ${this.tableName}`, code: "PGRST116" } };
       }
-      return { data: rows[0], count: rows.length, error: null };
+      return { data: { ...rows[0] }, count: rows.length, error: null };
     }
 
     if (this.isMaybeSingle) {
-      return { data: rows[0] || null, count: rows.length, error: null };
+      return { data: rows[0] ? { ...rows[0] } : null, count: rows.length, error: null };
     }
 
-    return { data: rows, count: rows.length, error: null };
+    return { data: rows.map((r) => ({ ...r })), count: rows.length, error: null };
   }
 
   then(onfulfilled?: (val: any) => any, onrejected?: (val: any) => any) {
@@ -422,7 +422,10 @@ export function createMockSupabase(initialState: MockDbState = {}) {
     storage: {
       from: vi.fn().mockReturnValue({
         createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: "https://example.com/file" }, error: null }),
-        createSignedUploadUrl: vi.fn().mockResolvedValue({ data: { signedUrl: "https://example.com/upload", token: "tok" }, error: null }),
+        createSignedUploadUrl: vi.fn().mockImplementation(async (path: string) => ({
+          data: { signedUrl: `https://example.com/upload/${path}`, path, token: "tok" },
+          error: null,
+        })),
         upload: vi.fn().mockResolvedValue({ data: { path: "test.pdf" }, error: null }),
         remove: vi.fn().mockResolvedValue({ data: [], error: null }),
       }),
